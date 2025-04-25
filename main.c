@@ -37,7 +37,7 @@ init_lexeme(void)
 }
 
 void
-append_lexeme_str(Lexeme *lexeme, char c)
+append_lexeme_char(Lexeme *lexeme, char c)
 {
     lexeme->str[lexeme->str_len] = c;
     lexeme->str_len++;
@@ -48,7 +48,7 @@ lexemize(char *input)
 {
     char *ptr;
     Lexeme *lexeme, **arr;
-    size_t num_lexemes;
+    size_t num_lexemes, line_num, column_num;
 
     arr = malloc(sizeof(Lexeme*) * 256);
     if (!arr)
@@ -58,20 +58,29 @@ lexemize(char *input)
     }
 
     num_lexemes = 0;
+    line_num = 1;
+    column_num = 1;
     lexeme = init_lexeme();
     for (ptr = input; *ptr != '\0'; ptr++)
     {
-        if (*ptr == ' ')
+        if (*ptr == '\n')
         {
+            line_num++;
+            column_num = 1;
+        } else if (*ptr == ' ' || *ptr == '\t' || *ptr == '\r')
+        {
+            lexeme->line = line_num;
+            lexeme->column = column_num - strlen(lexeme->str);
             arr[num_lexemes] = lexeme;
             num_lexemes++;
             lexeme = init_lexeme();
             continue;
         }
 
-        append_lexeme_str(lexeme, *ptr);
+        append_lexeme_char(lexeme, *ptr);
+        column_num++;
     }
-
+    
     arr[num_lexemes] = lexeme;
     return arr;
 }
