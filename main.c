@@ -4,16 +4,24 @@
 #include <ctype.h>
 
 #define LEXEME_STR_SIZE 64
+#define NUM_LEXEMES 14
 
 typedef struct Lexeme
 {
     char *str;
-    size_t str_len, start_idx, end_idx, line, column;
-    struct Lexeme *last, *next;
+    size_t str_len, line, col;
+    struct Lexeme *prev, *next;
 } Lexeme;
 
+char *lexemes[32] = {
+    "i8", "i16", "i32", "i64",
+    "u8", "u16", "u32", "u64",
+    "ptr",
+    "(", ")", "{", "}", ";", "=",
+};
+
 Lexeme*
-init_lexeme(void)
+lexeme_new(void)
 {
     Lexeme *lexeme;
     lexeme = malloc(sizeof(Lexeme));
@@ -23,7 +31,7 @@ init_lexeme(void)
         exit(1);
     }
 
-    lexeme->str = malloc(LEXEME_STR_SIZE * sizeof(char));
+    lexeme->str = malloc(LEXEME_STR_SIZE);
     if (!lexeme->str)
     {
         printf("error\n");
@@ -36,19 +44,51 @@ init_lexeme(void)
     return lexeme;
 }
 
-void
-append_lexeme_char(Lexeme *lexeme, char c)
+int
+lexeme_is_match(char *str)
 {
-    lexeme->str[lexeme->str_len] = c;
-    lexeme->str_len++;
+    size_t i;
+    for (i = 0; i < NUM_LEXEMES; i++)
+    {
+        if (strcmp(str, lexemes[i]) == 0)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+void
+lexeme_str_append(Lexeme *lexeme, char c)
+{
+    if (lexeme->str_len < LEXEME_STR_SIZE- 1)
+    {
+        lexeme->str[lexeme->str_len++] = c;
+    }
+}
+
+void
+lexeme_push(Lexeme *lexeme, Lexeme **arr, size_t *count, size_t line, size_t col)
+{
+    lexeme->str[lexeme->str_len] = '\0';
+    lexeme->line = line;
+    lexeme->col = col;
+    if (*count > 0)
+    {
+        arr[*count-1]->next = lexeme;
+        lexeme->prev = arr[*count-1];
+    }
+    arr[*count] = lexeme;
+    (*count)++;
 }
 
 Lexeme**
-lexemize(char *input)
+lexeme_lexemize(char *input)
 {
     char *ptr;
     Lexeme *lexeme, **arr;
-    size_t num_lexemes, line_num, column_num;
+    size_t count, line, col; 
 
     arr = malloc(sizeof(Lexeme*) * 256);
     if (!arr)
@@ -57,31 +97,36 @@ lexemize(char *input)
         exit(1);
     }
 
-    num_lexemes = 0;
-    line_num = 1;
-    column_num = 1;
-    lexeme = init_lexeme();
-    for (ptr = input; *ptr != '\0'; ptr++)
+    count = 0, line = 1, col = 1;
+    lexeme = lexeme_new();
+    for (ptr = input; *ptr; ptr++, col++)
     {
-        if (*ptr == '\n')
+        char c = *ptr;
+        if (c == '\n')
         {
-            line_num++;
-            column_num = 1;
-        } else if (*ptr == ' ' || *ptr == '\t' || *ptr == '\r')
+            line++;
+            col = 1;
+            continue;
+        } else if (strchr(" \t\r", c))
         {
-            lexeme->line = line_num;
-            lexeme->column = column_num - strlen(lexeme->str);
-            arr[num_lexemes] = lexeme;
-            num_lexemes++;
-            lexeme = init_lexeme();
+            continue;
+        } else if (strchr("(){};=", c))
+        {
+            lexeme_str_append(lexeme, c);
+            lexeme_push(lexeme, arr, &count, line, col);
+            lexeme = lexeme_new();
             continue;
         }
 
-        append_lexeme_char(lexeme, *ptr);
-        column_num++;
+        lexeme_str_append(lexeme, c);
+        if (lexeme_is_match(lexeme->str))
+        {
+            lexeme_push(lexeme, arr, &count, line, col);
+            lexeme = lexeme_new();
+        }
     }
     
-    arr[num_lexemes] = lexeme;
+    arr[count] = lexeme;
     return arr;
 }
 
@@ -91,7 +136,7 @@ main(void)
     Lexeme **arr;
     size_t i;
 
-    arr = lexemize("int main(void) { return 0; }");
+    arr = lexeme_lexemize(" i8 num = 0; ");
     for (i = 0; i < 6; i++)
     {
         printf("%s\n", arr[i]->str);
